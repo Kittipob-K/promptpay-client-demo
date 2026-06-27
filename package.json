@@ -1,0 +1,13 @@
+{
+  "name": "promptpay-client-demo",
+  "version": "1.0.0",
+  "description": "Demo client for PromptPay QR webhook integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  }
+}
