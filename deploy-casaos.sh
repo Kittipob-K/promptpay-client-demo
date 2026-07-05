@@ -99,7 +99,12 @@ chmod 600 "${REMOTE_PATH}/${ENV_FILE}"
 ENDSSH
 else
   echo -e "${YELLOW}[2/5] Checking env...${NC}"
-  ssh "${REMOTE_USER}@${REMOTE_HOST}" "test -f '${REMOTE_PATH}/${ENV_FILE}'"
+  if ! ssh "${REMOTE_USER}@${REMOTE_HOST}" "test -f '${REMOTE_PATH}/${ENV_FILE}'"; then
+    echo "Missing remote env: ${REMOTE_PATH}/${ENV_FILE}"
+    echo "First deploy needs env upload:"
+    echo "  ./deploy-casaos.sh --push-env"
+    exit 1
+  fi
 fi
 
 echo -e "${YELLOW}[3/5] Writing compose...${NC}"
