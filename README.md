@@ -70,6 +70,37 @@ Browser <- Express SSE <- NotiBank webhook -> Express /webhook
 
 API key ถูกเก็บไว้ฝั่ง Express proxy เท่านั้น ไม่ถูกส่งไปที่ browser
 
+## Deploy to CasaOS
+
+สคริปต์ deploy จะสร้าง container แยกชื่อ `promptpay-client-demo` บน CasaOS และเปิด port default `25455 -> 3002`
+
+Deploy ครั้งแรกพร้อมส่ง `.env`:
+
+```bash
+npm run deploy:casaos -- --push-env
+```
+
+Deploy โดยระบุ URL สาธารณะของ demo:
+
+```bash
+npm run deploy:casaos -- --push-env \
+  --public-url https://promptpay-demo.example.com
+```
+
+หลัง deploy ให้ตั้ง webhook URL ของ API key ใน NotiBank เป็น:
+
+```text
+https://promptpay-demo.example.com/webhook
+```
+
+ตัวเลือกที่ใช้บ่อย:
+
+```bash
+bash deploy-casaos.sh --demo-port 25455
+bash deploy-casaos.sh --api-base https://api-notibank.jesthai.online
+bash deploy-casaos.sh --skip-smoke
+```
+
 ## Environment Variables
 
 | Variable | Required | Description |

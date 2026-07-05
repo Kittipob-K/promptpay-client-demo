@@ -4,7 +4,8 @@
   "description": "Demo client for PromptPay QR webhook integration",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "deploy:casaos": "bash deploy-casaos.sh"
   },
   "dependencies": {
     "express": "^4.18.2",
