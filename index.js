@@ -1,126 +1,127 @@
 require('dotenv').config();
-const express = require('express');
+
 const crypto = require('crypto');
+const express = require('express');
 
 const app = express();
-app.use(express.json());
-app.use(express.static('public'));
+const sseClients = new Set();
 
-// ── Config ──────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3001;
-const API_BASE = process.env.API_BASE || 'http://localhost:3000';
-const API_KEY = process.env.API_KEY;   // sk_line_... key
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
-const PROMPTPAY_ID = process.env.PROMPTPAY_ID || '';
-const PROMPTPAY_TYPE = process.env.PROMPTPAY_TYPE || 'phone';
+const PORT = Number(process.env.PORT || 3002);
+const API_BASE = (process.env.API_BASE || 'http://localhost:3001').replace(/\/$/, '');
+const API_KEY = process.env.API_KEY;
 
 if (!API_KEY) {
   console.error('ERROR: API_KEY must be set in .env');
   process.exit(1);
 }
 
-// ── SSE clients ──────────────────────────────────────────────────────────────
-// Each browser connection is held here and receives push events
-const sseClients = new Set();
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  },
+}));
+app.use(express.static('public'));
 
 function broadcast(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of sseClients) {
-    res.write(payload);
-  }
+  for (const res of sseClients) res.write(payload);
 }
 
-// ── Routes ───────────────────────────────────────────────────────────────────
+function publicConfig() {
+  return {
+    apiBase: API_BASE,
+    demoPort: PORT,
+    webhookPath: '/webhook',
+    apiKeySuffix: API_KEY.slice(-6),
+  };
+}
 
-// Proxy: fetch PromptPay settings for display
-app.get('/settings', (req, res) => {
-  res.json({ promptpayId: PROMPTPAY_ID || null, promptpayType: PROMPTPAY_TYPE });
+function verifyWebhookSignature(req) {
+  const signature = req.headers['x-webhook-signature'];
+  const secret = process.env.WEBHOOK_SECRET;
+
+  if (!secret) return { ok: true, skipped: true };
+  if (typeof signature !== 'string') return { ok: false, reason: 'Missing signature' };
+
+  const expected = `sha256=${crypto
+    .createHmac('sha256', secret)
+    .update(req.rawBody || JSON.stringify(req.body))
+    .digest('hex')}`;
+
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  const valid = sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
+
+  return valid ? { ok: true, skipped: false } : { ok: false, reason: 'Invalid signature' };
+}
+
+app.get('/settings', (_req, res) => {
+  res.json(publicConfig());
 });
 
-// SSE stream — browser subscribes once and receives all status updates
 app.get('/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
+  res.write(`event: ready\ndata: ${JSON.stringify({ connected: true })}\n\n`);
 
   sseClients.add(res);
   req.on('close', () => sseClients.delete(res));
 });
 
-// Proxy: create a PromptPay transaction (browser → this server → NestJS)
-// We proxy here so the API key never touches the browser.
 app.post('/create-transaction', async (req, res) => {
-  const { amount, expiresInSeconds } = req.body;
+  const amount = Number(req.body.amount);
+  const orderId = String(req.body.orderId || '').trim() || `demo-${Date.now()}`;
+  const expiresInSeconds = Number(req.body.expiresInSeconds || 300);
 
-  if (!amount || isNaN(amount) || Number(amount) <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: 'amount must be a positive number' });
   }
 
-  const nestRes = await fetch(`${API_BASE}/promptpay/transactions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_KEY}`,
-    },
-    body: JSON.stringify({ amount: Number(amount), expiresInSeconds }),
-  });
+  const body = {
+    amount,
+    orderId,
+    expiresInSeconds,
+    metadata: { source: 'promptpay-client-demo' },
+  };
 
-  const data = await nestRes.json();
-  if (!nestRes.ok) {
-    return res.status(nestRes.status).json(data);
+  try {
+    const apiRes = await fetch(`${API_BASE}/promptpay/transactions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const text = await apiRes.text();
+    const data = text ? JSON.parse(text) : {};
+
+    if (!apiRes.ok) return res.status(apiRes.status).json(data);
+    return res.status(201).json(data);
+  } catch (err) {
+    return res.status(502).json({
+      error: 'UPSTREAM_UNAVAILABLE',
+      message: err instanceof Error ? err.message : 'Cannot reach NotiBank API',
+    });
   }
-  return res.json(data);
 });
 
-// Webhook receiver — NestJS POSTs here when a transaction is fulfilled or expired
 app.post('/webhook', (req, res) => {
-  // ── Signature verification ──────────────────────────────────────────────────
-  // IMPORTANT: Always verify the webhook signature in production.
-  // Without this check, anyone can POST fake events to your endpoint and trick
-  // your system into marking transactions as fulfilled.
-  //
-  // How it works:
-  //   1. The server signs the raw JSON body with HMAC-SHA256 using WEBHOOK_SECRET
-  //   2. It sends the result as:  X-Webhook-Signature: sha256=<hex>
-  //   3. We recompute the HMAC and compare with timingSafeEqual — a constant-time
-  //      comparison that prevents timing-oracle attacks.
-  // ────────────────────────────────────────────────────────────────────────────
-  const signature = req.headers['x-webhook-signature'];
-  if (!signature) {
-    console.warn('Webhook received without signature — rejected');
-    return res.status(401).json({ error: 'Missing signature' });
-  }
-
-  const rawBody = JSON.stringify(req.body);
-  const expected = `sha256=${crypto
-    .createHmac('sha256', WEBHOOK_SECRET)
-    .update(rawBody)
-    .digest('hex')}`;
-
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expected);
-  const valid =
-    sigBuf.length === expBuf.length &&
-    crypto.timingSafeEqual(sigBuf, expBuf);
-
-  if (!valid) {
-    console.warn('Webhook signature mismatch — rejected');
-    return res.status(401).json({ error: 'Invalid signature' });
-  }
+  const verification = verifyWebhookSignature(req);
+  if (!verification.ok) return res.status(401).json({ error: verification.reason });
 
   const { event, transaction } = req.body;
-  console.log(`Webhook received: ${event} — txn ${transaction?.id}`);
+  console.log(`Webhook received: ${event} ${transaction?.id || ''}`);
+  broadcast('webhook', { event, transaction, signatureVerified: !verification.skipped });
 
-  // Push the update to all connected browsers via SSE
-  broadcast('webhook', { event, transaction });
-
-  res.json({ received: true });
+  return res.json({ received: true });
 });
 
-// ── Start ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`Demo client running at http://localhost:${PORT}`);
-  console.log(`Webhook receiver ready at http://localhost:${PORT}/webhook`);
-  console.log(`Set this URL in your API key's webhook URL field on the dashboard.`);
+  console.log(`PromptPay demo running: http://localhost:${PORT}`);
+  console.log(`NotiBank API base: ${API_BASE}`);
+  console.log(`Webhook endpoint: http://localhost:${PORT}/webhook`);
 });

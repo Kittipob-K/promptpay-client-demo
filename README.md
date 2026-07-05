@@ -1,79 +1,80 @@
 # PromptPay Client Demo
 
-ตัวอย่าง integration สำหรับระบบรับชำระเงิน PromptPay QR + Webhook
+Demo client สำหรับทดสอบการสร้าง PromptPay QR ผ่าน NotiBank API และรับ webhook event กลับมาที่หน้าเว็บแบบ real-time ผ่าน SSE
+
+## What Changed
+
+- ใช้ NotiBank API ปัจจุบันที่บังคับ `orderId`
+- ไม่ใช้ `PROMPTPAY_ID` และ `PROMPTPAY_TYPE` ใน demo แล้ว เพราะค่าพร้อมเพย์อยู่ในฐานข้อมูลของผู้ใช้ NotiBank
+- `WEBHOOK_SECRET` เป็น optional และใช้เฉพาะ verify webhook signature ของ API key ที่เลือก
+- ปรับ UI เป็น dark grid, emerald accent และ Noto Sans Thai ให้ใกล้กับหน้า auth/dashboard ของ NotiBank
 
 ## Prerequisites
 
 - Node.js 18+
-- บัญชีและ API key จากระบบ (ดูขั้นตอนด้านล่าง)
-- NestJS server รันอยู่บนเครื่องเดียวกัน (default: `http://localhost:3000`)
+- NotiBank API รันอยู่ เช่น `http://localhost:3001`
+- ผู้ใช้ใน NotiBank ตั้งค่า PromptPay ID แล้ว
+- API key จากหน้า API Keys ของ NotiBank
 
 ## Setup
 
-### 1. สร้าง API key
-
-เข้า dashboard → API Keys → สร้าง key ใหม่ จด `id` และ `sk_line_...` key ไว้
-
-### 2. ตั้งค่า PromptPay ID
-
-เข้า dashboard → PromptPay Settings → ใส่หมายเลขโทรศัพท์ / เลขบัตรประชาชน
-
-### 3. ตั้ง webhook URL บน API key
-
-เข้า dashboard → API Keys → คลิก ✏ แก้ไข webhook URL ของ key ที่จะใช้  
-ใส่: `http://localhost:3001/webhook` (หรือ URL สาธารณะถ้า deploy บน server)
-
-### 4. ติดตั้งและ config
-
 ```bash
 cp .env.example .env
-# แก้ .env:
-#   API_KEY=sk_line_...    (จาก dashboard)
-#   WEBHOOK_SECRET=...     (ตรงกับ WEBHOOK_SECRET ใน NestJS .env)
-#   PROMPTPAY_ID=...       (เบอร์โทรหรือเลขบัตรของคุณ)
-
 npm install
 npm start
 ```
 
-เปิด http://localhost:3001
+เปิด `http://localhost:3002`
 
-## วิธีใช้งาน
+ค่า `.env` ขั้นต่ำ:
 
-1. หน้าเว็บจะแสดง PromptPay ID ที่ตั้งไว้บน server
-2. กรอกจำนวนเงิน → กด "สร้าง QR"
-3. QR code จะปรากฏ พร้อมนับถอยหลังเวลาหมดอายุ
-4. เมื่อลูกค้าโอนเงิน → สถานะจะเปลี่ยนเป็น **ชำระเงินแล้ว** ทันที (ผ่าน webhook)
-5. ถ้าหมดเวลา → สถานะจะเปลี่ยนเป็น **หมดอายุแล้ว** อัตโนมัติ
-
-## สถาปัตยกรรม
-
-```
-Browser ──GET /events──► Express (SSE)
-   │                          │
-   └──POST /create-transaction─┤
-                              │──POST /promptpay/transactions──► NestJS
-                              │
-NestJS ──POST /webhook──────► Express ──SSE push──► Browser
+```bash
+API_BASE=http://localhost:3001
+PORT=3002
+API_KEY=sk_line_your_key_here
 ```
 
-## Webhook Signature Verification
+ถ้าต้องการ verify webhook signature ให้ใส่ secret เดียวกับ API key นั้น:
 
-ทุก webhook request จาก NestJS มี header:
-```
-X-Webhook-Signature: sha256=<hmac-sha256>
+```bash
+WEBHOOK_SECRET=your_api_key_webhook_secret_here
 ```
 
-`index.js` verify signature ด้วย `crypto.timingSafeEqual` ก่อนประมวลผล  
-ดูโค้ดใน `index.js` หัวข้อ "Signature verification" สำหรับคำอธิบายละเอียด
+## Webhook URL
+
+ตั้ง webhook URL ใน NotiBank API key ให้ชี้มาที่ demo receiver:
+
+```text
+http://localhost:3002/webhook
+```
+
+สำหรับ production หรือ security policy ปัจจุบันของ NotiBank อาจไม่อนุญาต `localhost`/private IP เป็น webhook URL ให้ใช้ HTTPS public URL หรือ tunnel แทน เช่น:
+
+```text
+https://your-public-demo-url.example.com/webhook
+```
+
+## Usage
+
+1. กรอกจำนวนเงิน
+2. ใส่ `orderId` หรือเว้นว่างเพื่อให้ demo สร้าง `demo-<timestamp>`
+3. กดสร้าง QR
+4. หน้าเว็บจะแสดง QR, ยอดรวม suffix, countdown และ webhook event
+
+## Flow
+
+```text
+Browser -> Express demo -> NotiBank /promptpay/transactions
+Browser <- Express SSE <- NotiBank webhook -> Express /webhook
+```
+
+API key ถูกเก็บไว้ฝั่ง Express proxy เท่านั้น ไม่ถูกส่งไปที่ browser
 
 ## Environment Variables
 
 | Variable | Required | Description |
-|---|---|---|
-| `API_BASE` | | NestJS server URL (default: `http://localhost:3000`) |
-| `PORT` | | Port ของ demo client (default: `3001`) |
-| `API_KEY` | ✓ | `sk_line_...` key จาก dashboard |
-| `WEBHOOK_SECRET` | | ต้องตรงกับ `WEBHOOK_SECRET` ใน NestJS `.env` |
-| `PROMPTPAY_ID` | | หมายเลขพร้อมเพย์ที่แสดงในหน้า UI (เพื่อ reference เท่านั้น) |
-| `PROMPTPAY_TYPE` | | ประเภท: `phone`, `national_id`, `tax_id`, `ewallet` (default: `phone`) |
+|---|---:|---|
+| `API_BASE` | | NotiBank API URL, default `http://localhost:3001` |
+| `PORT` | | Demo client port, default `3002` |
+| `API_KEY` | yes | `sk_line_...` key จาก NotiBank dashboard |
+| `WEBHOOK_SECRET` | | Optional signature verification secret for this API key |

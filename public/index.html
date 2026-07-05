@@ -3,347 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PromptPay QR Demo</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 32px;
-      width: 100%;
-      max-width: 480px;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
-    }
-
-    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-    .subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
-
-    .settings-bar {
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 13px;
-      color: #166534;
-      margin-bottom: 24px;
-    }
-    .settings-bar span { font-weight: 600; }
-
-    label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #444; }
-
-    input[type="number"] {
-      width: 100%;
-      padding: 10px 14px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 16px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    input[type="number"]:focus { border-color: #6366f1; }
-
-    .row { display: flex; gap: 10px; align-items: flex-end; margin-top: 16px; }
-
-    button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    button.primary { background: #6366f1; color: #fff; flex: 1; }
-    button.secondary { background: #f0f0f0; color: #444; }
-
-    .divider { border: none; border-top: 1px solid #f0f0f0; margin: 24px 0; }
-
-    /* QR section */
-    #qr-section { display: none; }
-    #qr-section.visible { display: block; }
-
-    .qr-amount {
-      text-align: center;
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 4px;
-    }
-    .qr-amount-label { text-align: center; font-size: 13px; color: #888; margin-bottom: 16px; }
-
-    .qr-img-wrap {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 16px;
-    }
-    .qr-img-wrap img {
-      width: 220px;
-      height: 220px;
-      border-radius: 12px;
-      border: 1px solid #eee;
-    }
-
-    /* Status badge */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      border-radius: 99px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .status-badge.pending  { background: #fef9c3; color: #854d0e; }
-    .status-badge.fulfilled { background: #dcfce7; color: #166534; }
-    .status-badge.expired  { background: #fee2e2; color: #991b1b; }
-
-    .status-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    /* Countdown */
-    .countdown {
-      font-size: 13px;
-      color: #888;
-    }
-    .countdown.urgent { color: #dc2626; font-weight: 600; }
-
-    /* Event log */
-    .log-title { font-size: 12px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    #event-log { font-size: 12px; color: #555; line-height: 1.8; max-height: 140px; overflow-y: auto; }
-    #event-log .log-line { padding: 2px 0; border-bottom: 1px solid #f5f5f5; }
-    #event-log .log-fulfilled { color: #16a34a; font-weight: 600; }
-    #event-log .log-expired   { color: #dc2626; }
-
-    .error-msg { color: #dc2626; font-size: 13px; margin-top: 8px; }
-  </style>
+  <title>NotiBank PromptPay Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<div class="card">
-  <h1>PromptPay QR Demo</h1>
-  <p class="subtitle">ทดสอบระบบรับชำระเงินผ่าน PromptPay + Webhook</p>
+  <main class="surface">
+    <section class="shell">
+      <div class="brand">
+        <div class="logo">NB</div>
+        <div>
+          <p class="eyebrow">NotiBank Integration</p>
+          <h1>PromptPay QR Demo</h1>
+        </div>
+      </div>
 
-  <div class="settings-bar" id="settings-bar">
-    กำลังโหลด PromptPay ID…
-  </div>
+      <div class="grid">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>สร้างรายการทดสอบ</h2>
+              <p>API key จะอยู่เฉพาะฝั่ง Express proxy ไม่ถูกส่งไป browser</p>
+            </div>
+            <span class="status online" id="sse-status">SSE</span>
+          </div>
 
-  <label for="amount">จำนวนเงิน (บาท)</label>
-  <input type="number" id="amount" min="1" step="1" placeholder="100" />
-  <p class="error-msg" id="amount-error"></p>
+          <div class="config" id="settings-bar">กำลังโหลดการตั้งค่า...</div>
 
-  <div class="row">
-    <button class="primary" id="create-btn" onclick="createTransaction()">สร้าง QR</button>
-    <button class="secondary" onclick="reset()">เริ่มใหม่</button>
-  </div>
+          <form id="payment-form" class="form">
+            <label>
+              <span>จำนวนเงิน (บาท)</span>
+              <input id="amount" type="number" min="0.01" step="0.01" placeholder="100.00" required>
+            </label>
 
-  <hr class="divider">
+            <label>
+              <span>Order ID</span>
+              <input id="order-id" type="text" maxlength="128" placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ">
+            </label>
 
-  <!-- QR + status section, hidden until a transaction is created -->
-  <div id="qr-section">
-    <div class="qr-amount" id="qr-amount"></div>
-    <div class="qr-amount-label">จำนวนที่ต้องโอน (รวม suffix ความเป็นเอกลักษณ์)</div>
+            <label>
+              <span>หมดอายุใน</span>
+              <select id="expires">
+                <option value="300">5 นาที</option>
+                <option value="600">10 นาที</option>
+                <option value="900">15 นาที</option>
+              </select>
+            </label>
 
-    <div class="qr-img-wrap">
-      <img id="qr-img" src="" alt="QR Code" />
-    </div>
+            <p class="error" id="form-error"></p>
 
-    <div class="status-row">
-      <span class="status-badge pending" id="status-badge">⏳ รอการชำระ</span>
-      <span class="countdown" id="countdown"></span>
-    </div>
+            <div class="actions">
+              <button class="primary" id="create-btn" type="submit">สร้าง QR</button>
+              <button class="secondary" type="button" id="reset-btn">ล้างค่า</button>
+            </div>
+          </form>
+        </section>
 
-    <hr class="divider" style="margin: 16px 0">
+        <section class="panel result">
+          <div class="panel-head">
+            <div>
+              <h2>สถานะรายการ</h2>
+              <p id="txn-label">ยังไม่มีรายการที่กำลังติดตาม</p>
+            </div>
+            <span class="status pending" id="status-badge">พร้อม</span>
+          </div>
 
-    <div class="log-title">Webhook Events</div>
-    <div id="event-log"><div class="log-line" style="color:#aaa">รอ webhook...</div></div>
-  </div>
-</div>
+          <div class="empty" id="empty-state">
+            <div class="qr-placeholder"></div>
+            <p>สร้าง QR เพื่อดูยอดชำระและรอ webhook จาก NotiBank</p>
+          </div>
 
-<script>
-  // ── State ──────────────────────────────────────────────────────────────────
-  let currentTxn = null;
-  let countdownInterval = null;
-  let eventSource = null;
+          <div class="qr-card" id="qr-section" hidden>
+            <p class="amount" id="qr-amount">฿0.00</p>
+            <p class="muted">ยอดนี้รวม suffix เพื่อจับคู่รายการอัตโนมัติ</p>
+            <img id="qr-img" alt="PromptPay QR Code">
+            <div class="meta">
+              <span id="countdown">-</span>
+              <span id="order-label">-</span>
+            </div>
+          </div>
+        </section>
+      </div>
 
-  // ── On page load ──────────────────────────────────────────────────────────
-  window.addEventListener('DOMContentLoaded', () => {
-    loadSettings();
-    connectSSE();
-  });
-
-  async function loadSettings() {
-    try {
-      const res = await fetch('/settings');
-      const data = await res.json();
-      const bar = document.getElementById('settings-bar');
-      if (data.promptpayId) {
-        bar.innerHTML = `PromptPay ID: <span>${data.promptpayId}</span> (${data.promptpayType})`;
-      } else {
-        bar.textContent = 'ยังไม่ได้ตั้งค่า PromptPay ID — กรุณาตั้งค่าใน dashboard ก่อน';
-        bar.style.background = '#fef9c3';
-        bar.style.borderColor = '#fde047';
-        bar.style.color = '#854d0e';
-      }
-    } catch {
-      document.getElementById('settings-bar').textContent = 'โหลด settings ไม่ได้';
-    }
-  }
-
-  // ── SSE: subscribe to webhook pushes from the Express server ──────────────
-  function connectSSE() {
-    eventSource = new EventSource('/events');
-
-    eventSource.addEventListener('webhook', (e) => {
-      const { event, transaction } = JSON.parse(e.data);
-      handleWebhookEvent(event, transaction);
-    });
-
-    eventSource.onerror = () => {
-      logEvent('SSE disconnected — reconnecting…', '');
-    };
-  }
-
-  function handleWebhookEvent(event, transaction) {
-    // Only update UI if this webhook is for the current transaction
-    if (!currentTxn || transaction.id !== currentTxn.id) {
-      logEvent(`${event} (txn ${transaction.id.slice(0, 12)}…)`, event);
-      return;
-    }
-
-    if (event === 'transaction.fulfilled') {
-      setStatus('fulfilled', '✅ ชำระเงินแล้ว');
-      stopCountdown();
-      logEvent('✅ transaction.fulfilled — ชำระเงินสำเร็จ', 'fulfilled');
-    } else if (event === 'transaction.expired') {
-      setStatus('expired', '❌ หมดอายุแล้ว');
-      stopCountdown();
-      logEvent('❌ transaction.expired — QR หมดอายุ', 'expired');
-    }
-  }
-
-  // ── Create transaction ────────────────────────────────────────────────────
-  async function createTransaction() {
-    const amountInput = document.getElementById('amount');
-    const amount = parseFloat(amountInput.value);
-    const errEl = document.getElementById('amount-error');
-
-    errEl.textContent = '';
-    if (!amount || amount <= 0) {
-      errEl.textContent = 'กรุณาใส่จำนวนเงินที่ถูกต้อง';
-      return;
-    }
-
-    document.getElementById('create-btn').disabled = true;
-
-    try {
-      const res = await fetch('/create-transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        errEl.textContent = data.message || data.error || 'เกิดข้อผิดพลาด';
-        document.getElementById('create-btn').disabled = false;
-        return;
-      }
-
-      showTransaction(data);
-    } catch (err) {
-      errEl.textContent = 'เชื่อมต่อ server ไม่ได้';
-      document.getElementById('create-btn').disabled = false;
-    }
-  }
-
-  function showTransaction(txn) {
-    currentTxn = txn;
-
-    document.getElementById('qr-amount').textContent = `฿${txn.amount.toFixed(2)}`;
-    document.getElementById('qr-img').src = txn.qrDataUrl;
-    document.getElementById('qr-section').classList.add('visible');
-
-    setStatus('pending', '⏳ รอการชำระ');
-
-    // Start countdown using expiresAt from the server response
-    startCountdown(new Date(txn.expiresAt));
-
-    logEvent(`สร้าง QR สำเร็จ — txn ${txn.id.slice(0, 12)}…`, '');
-  }
-
-  // ── Countdown timer ───────────────────────────────────────────────────────
-  // We base the countdown on expiresAt sent by the server, not a local estimate.
-  function startCountdown(expiresAt) {
-    stopCountdown();
-    const el = document.getElementById('countdown');
-
-    function tick() {
-      const remaining = Math.max(0, expiresAt - Date.now());
-      const mins = Math.floor(remaining / 60000);
-      const secs = Math.floor((remaining % 60000) / 1000);
-      el.textContent = `หมดอายุใน ${mins}:${String(secs).padStart(2, '0')}`;
-      el.className = `countdown${remaining < 30000 ? ' urgent' : ''}`;
-
-      if (remaining === 0) {
-        stopCountdown();
-        el.textContent = 'หมดอายุแล้ว';
-      }
-    }
-
-    tick();
-    countdownInterval = setInterval(tick, 1000);
-  }
-
-  function stopCountdown() {
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-    }
-  }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function setStatus(state, label) {
-    const badge = document.getElementById('status-badge');
-    badge.textContent = label;
-    badge.className = `status-badge ${state}`;
-  }
-
-  function logEvent(message, type) {
-    const log = document.getElementById('event-log');
-    // Clear placeholder on first real event
-    if (log.querySelector('[style*="color:#aaa"]')) log.innerHTML = '';
-
-    const line = document.createElement('div');
-    line.className = `log-line${type ? ` log-${type}` : ''}`;
-    line.textContent = `${new Date().toLocaleTimeString('th')} — ${message}`;
-    log.prepend(line);
-  }
-
-  function reset() {
-    currentTxn = null;
-    stopCountdown();
-    document.getElementById('qr-section').classList.remove('visible');
-    document.getElementById('amount').value = '';
-    document.getElementById('amount-error').textContent = '';
-    document.getElementById('create-btn').disabled = false;
-    document.getElementById('event-log').innerHTML = '<div class="log-line" style="color:#aaa">รอ webhook...</div>';
-    document.getElementById('countdown').textContent = '';
-  }
-</script>
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Webhook Events</h2>
+            <p>แสดง event ที่ NotiBank ส่งกลับมายัง demo client</p>
+          </div>
+        </div>
+        <div id="event-log" class="event-log">
+          <div class="log-line muted">รอ webhook...</div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="/app.js"></script>
 </body>
 </html>
