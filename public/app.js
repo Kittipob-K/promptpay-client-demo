@@ -37,6 +37,10 @@ function connectSSE() {
     handleWebhookEvent(data.event, data.transaction, data.signatureVerified);
   });
 
+  source.addEventListener('connector', (event) => {
+    window.updateConnectorStatus?.(JSON.parse(event.data));
+  });
+
   source.onerror = () => {
     $('sse-status').textContent = 'SSE reconnecting';
     $('sse-status').className = 'status pending';

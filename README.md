@@ -23,12 +23,25 @@ cp .env.example .env
 API_BASE=http://localhost:3001
 PORT=3002
 API_KEY=sk_line_your_key_here
+LINE_CONNECTOR_KEY=lnc_your_connector_key
+LINE_CONNECTOR_SECRET=your_connector_upload_secret
+LINE_TOKEN_FILE=./secrets/line-token.json
 ```
 
 ถ้าต้องการตรวจลายเซ็น webhook ให้ใส่ secret ของ API key นั้น:
 
 ```bash
 WEBHOOK_SECRET=your_api_key_webhook_secret_here
+```
+
+ไฟล์ `LINE_TOKEN_FILE` ต้องเป็น JSON แบบนี้:
+
+```json
+{
+  "authToken": "line-access-token",
+  "refreshToken": "line-refresh-token",
+  "mid": "u1234567890"
+}
 ```
 
 ติดตั้ง dependency:
@@ -50,6 +63,14 @@ npm start
 ```text
 http://localhost:3002
 ```
+
+เมื่อมีค่า connector ครบ demo server จะ:
+
+- อ่าน LINE token จากไฟล์ local
+- fetch public key จาก NotiBank
+- เข้ารหัส token แล้วส่งไป `POST /line/connector/token`
+- retry ให้อัตโนมัติทุก 5 นาที
+- เปิดให้กด manual retry จากหน้า demo
 
 ตั้ง webhook URL ของ API key ใน NotiBank เป็น:
 

@@ -90,6 +90,17 @@
       <section class="panel log-panel">
         <div class="panel-head">
           <div>
+            <h2>LINE Connector</h2>
+            <p>สถานะการส่ง LINE token แบบเข้ารหัสจาก customer server ไปยัง NotiBank</p>
+          </div>
+          <button class="secondary" id="connector-upload-btn" type="button">อัปโหลดอีกครั้ง</button>
+        </div>
+        <div id="connector-status" class="config">กำลังโหลดสถานะ connector...</div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <div>
             <h2>Webhook Events</h2>
             <p>แสดง event ที่ NotiBank ส่งกลับมายัง demo client</p>
           </div>
@@ -101,5 +112,6 @@
     </section>
   </main>
   <script src="/app.js"></script>
+  <script src="/connector.js"></script>
 </body>
 </html>
