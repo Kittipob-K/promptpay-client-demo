@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 
 function createLineConnectorClient(input) {
   const state = {
-    configured: !!(input.apiBase && input.connectorKey && input.connectorSecret && input.tokenFile),
+    configured: !!(input.apiBase && input.apiKey && input.sharedSecret && input.tokenFile),
     inFlight: false,
     lastAttemptAt: null,
     lastSuccessAt: null,
@@ -23,12 +23,12 @@ function createLineConnectorClient(input) {
       const body = JSON.stringify(encryptTokenBundle(publicKey, tokenBundle));
       const timestamp = Date.now().toString();
       const nonce = crypto.randomBytes(16).toString('hex');
-      const signature = signRequest(input.connectorSecret, timestamp, nonce, body);
+      const signature = signRequest(input.sharedSecret, timestamp, nonce, body);
       const res = await fetch(`${input.apiBase}/line/connector/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-connector-key': input.connectorKey,
+          Authorization: `Bearer ${input.apiKey}`,
           'x-connector-timestamp': timestamp,
           'x-connector-nonce': nonce,
           'x-connector-signature': signature,
