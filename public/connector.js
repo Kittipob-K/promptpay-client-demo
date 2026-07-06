@@ -43,6 +43,7 @@ function renderConnectorStatus() {
     return;
   }
   const lines = [
+    `Mode: ${connectorState.mode || '-'}`,
     `Token file: ${connectorState.tokenFile || '-'}`,
     `Last attempt: ${format(connectorState.lastAttemptAt)}`,
     `Last success: ${format(connectorState.lastSuccessAt)}`,

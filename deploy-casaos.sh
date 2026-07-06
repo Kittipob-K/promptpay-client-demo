@@ -18,6 +18,7 @@ ARCHIVE_NAME="${PROJECT_NAME}.tar.gz"
 STAGING_DIR=""
 PUSH_ENV=0
 SKIP_SMOKE=0
+DRY_RUN=0
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -36,8 +37,18 @@ Options:
   --api-base URL       NotiBank API base (default: ${API_BASE})
   --public-url URL     Public demo URL for smoke output
   --skip-smoke         Skip HTTP smoke test
+  --dry-run            Print planned steps without running them
   --help               Show this help text
+
+Examples:
+  bash deploy-casaos.sh --push-env
+  bash deploy-casaos.sh --push-env --public-url https://demo.example.com
+  bash deploy-casaos.sh --demo-port 25455 --api-base https://api-notibank.jesthai.online --dry-run
 EOF
+}
+
+require_value() {
+  [ $# -ge 2 ] || { echo "Missing value for $1" >&2; exit 1; }
 }
 
 cleanup() {
@@ -48,16 +59,17 @@ trap cleanup EXIT
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --host) REMOTE_HOST="$2"; shift ;;
-    --user) REMOTE_USER="$2"; shift ;;
-    --path) REMOTE_PATH="$2"; shift ;;
+    --host) require_value "$@"; REMOTE_HOST="$2"; shift ;;
+    --user) require_value "$@"; REMOTE_USER="$2"; shift ;;
+    --path) require_value "$@"; REMOTE_PATH="$2"; shift ;;
     --push-env) PUSH_ENV=1 ;;
-    --env-file) LOCAL_ENV_FILE="$2"; shift ;;
-    --demo-port) DEMO_PORT="$2"; shift ;;
-    --app-port) APP_PORT="$2"; shift ;;
-    --api-base) API_BASE="$2"; shift ;;
-    --public-url) DEMO_PUBLIC_URL="$2"; shift ;;
+    --env-file) require_value "$@"; LOCAL_ENV_FILE="$2"; shift ;;
+    --demo-port) require_value "$@"; DEMO_PORT="$2"; shift ;;
+    --app-port) require_value "$@"; APP_PORT="$2"; shift ;;
+    --api-base) require_value "$@"; API_BASE="$2"; shift ;;
+    --public-url) require_value "$@"; DEMO_PUBLIC_URL="$2"; shift ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
+    --dry-run) DRY_RUN=1 ;;
     --help) usage; exit 0 ;;
     *) echo "Unknown option: $1"; usage; exit 1 ;;
   esac
@@ -72,10 +84,21 @@ done
 echo -e "${GREEN}=== Deploy PromptPay Client Demo ===${NC}"
 echo "Remote: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}"
 echo "API base: ${API_BASE}"
+[ "${DRY_RUN}" = "0" ] || {
+  echo "Dry run only"
+  echo "[1/5] Upload source archive to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}"
+  [ "${PUSH_ENV}" = "0" ] || echo "[2/5] Upload env file ${LOCAL_ENV_FILE} -> ${ENV_FILE}"
+  [ "${PUSH_ENV}" = "1" ] || echo "[2/5] Reuse remote env ${REMOTE_PATH}/${ENV_FILE}"
+  echo "[3/5] Write docker-compose.yml with DEMO_PORT=${DEMO_PORT}, APP_PORT=${APP_PORT}"
+  echo "[4/5] docker compose up -d --build --force-recreate --remove-orphans"
+  [ "${SKIP_SMOKE}" = "1" ] && echo "[5/5] Smoke test skipped" || echo "[5/5] Smoke test http://localhost:${DEMO_PORT}/"
+  echo "Webhook URL should be: ${DEMO_PUBLIC_URL:-http://${REMOTE_HOST}:${DEMO_PORT}}/webhook"
+  exit 0
+}
 
 STAGING_DIR="$(mktemp -d)"
 mkdir -p "${STAGING_DIR}/${PROJECT_NAME}"
-cp package.json package-lock.json index.js Dockerfile "${STAGING_DIR}/${PROJECT_NAME}/"
+cp package.json package-lock.json index.js connector-client.js Dockerfile "${STAGING_DIR}/${PROJECT_NAME}/"
 cp -R public "${STAGING_DIR}/${PROJECT_NAME}/public"
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "${ARCHIVE_NAME}" -C "${STAGING_DIR}" "${PROJECT_NAME}"
 

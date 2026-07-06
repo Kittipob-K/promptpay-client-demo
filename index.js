@@ -16,12 +16,14 @@ const connector = createLineConnectorClient({
   apiKey: API_KEY,
   sharedSecret: WEBHOOK_SECRET,
   tokenFile: process.env.LINE_TOKEN_FILE,
+  lineEmail: process.env.LINE_EMAIL,
+  linePassword: process.env.LINE_PASSWORD,
   intervalMs: Number(process.env.LINE_CONNECTOR_UPLOAD_INTERVAL_MS || 300000),
   onStatus: (status) => broadcast('connector', status),
 });
 
 if (!API_KEY) {
-  console.error('ERROR: API_KEY must be set in .env');
+  console.error('ERROR: API_KEY must be set in .env for PromptPay + LINE Connector');
   process.exit(1);
 }
 
@@ -70,7 +72,7 @@ function verifyBootstrapSignature(req) {
   const timestamp = req.headers['x-connector-timestamp'];
   const signature = req.headers['x-connector-signature'];
   const secret = WEBHOOK_SECRET;
-  if (!secret) return { ok: false, reason: 'Missing WEBHOOK_SECRET' };
+  if (!secret) return { ok: false, reason: 'Missing WEBHOOK_SECRET for shared API key' };
   if (typeof timestamp !== 'string' || typeof signature !== 'string') {
     return { ok: false, reason: 'Missing bootstrap signature headers' };
   }

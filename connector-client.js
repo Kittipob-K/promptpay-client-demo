@@ -3,7 +3,8 @@ const fs = require('fs/promises');
 
 function createLineConnectorClient(input) {
   const state = {
-    configured: !!(input.apiBase && input.apiKey && input.sharedSecret && input.tokenFile),
+    configured: !!(input.apiBase && input.apiKey && input.sharedSecret && (hasCredentials() || input.tokenFile)),
+    mode: hasCredentials() ? 'email_password' : 'token_file',
     inFlight: false,
     lastAttemptAt: null,
     lastSuccessAt: null,
@@ -17,10 +18,9 @@ function createLineConnectorClient(input) {
     state.lastAttemptAt = new Date().toISOString();
     input.onStatus?.(publicStatus());
     try {
-      const tokenBundle = JSON.parse(await fs.readFile(input.tokenFile, 'utf8'));
-      assertTokenBundle(tokenBundle);
+      const payload = await readUploadPayload();
       const publicKey = await fetchJson(`${input.apiBase}/line/connector/public-key`);
-      const body = JSON.stringify(encryptTokenBundle(publicKey, tokenBundle));
+      const body = JSON.stringify(encryptPayload(publicKey, payload));
       const timestamp = Date.now().toString();
       const nonce = crypto.randomBytes(16).toString('hex');
       const signature = signRequest(input.sharedSecret, timestamp, nonce, body);
@@ -35,7 +35,10 @@ function createLineConnectorClient(input) {
         },
         body,
       });
-      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(text);
+      if (data?.tokenBundle) await saveTokenBundle(data.tokenBundle);
       state.lastSuccessAt = new Date().toISOString();
       state.lastError = null;
     } catch (err) {
@@ -65,6 +68,31 @@ function createLineConnectorClient(input) {
   }
 
   return { start, uploadNow, publicStatus, saveTokenBundle };
+
+  async function readUploadPayload() {
+    const tokenBundle = await readTokenBundle();
+    if (tokenBundle && hasCredentials()) {
+      return { ...tokenBundle, fallback: { type: 'email_password', email: input.lineEmail, password: input.linePassword } };
+    }
+    if (tokenBundle) return tokenBundle;
+    if (hasCredentials()) return { type: 'email_password', email: input.lineEmail, password: input.linePassword };
+    throw new Error('Missing LINE token file and LINE credentials');
+  }
+
+  function hasCredentials() {
+    return !!(input.lineEmail && input.linePassword);
+  }
+
+  async function readTokenBundle() {
+    try {
+      const tokenBundle = JSON.parse(await fs.readFile(input.tokenFile, 'utf8'));
+      assertTokenBundle(tokenBundle);
+      return tokenBundle;
+    } catch (err) {
+      if (!hasCredentials()) throw err;
+      return null;
+    }
+  }
 }
 
 async function fetchJson(url) {
@@ -73,11 +101,11 @@ async function fetchJson(url) {
   return res.json();
 }
 
-function encryptTokenBundle(publicKey, tokenBundle) {
+function encryptPayload(publicKey, payload) {
   const aesKey = crypto.randomBytes(32);
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
-  const plaintext = Buffer.from(JSON.stringify(tokenBundle), 'utf8');
+  const plaintext = Buffer.from(JSON.stringify(payload), 'utf8');
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
   const encryptedKey = crypto.publicEncrypt({ key: publicKey.publicKeyPem, oaepHash: 'sha256' }, aesKey);
