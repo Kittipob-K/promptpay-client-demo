@@ -2,3 +2,4 @@ node_modules/
 .env
 secrets/line-token.json
 deploy-casaos.sh
+package-lock.json
