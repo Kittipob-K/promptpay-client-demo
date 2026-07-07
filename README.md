@@ -119,6 +119,450 @@ http://localhost:3002/webhook
 https://your-demo-domain.example.com/webhook
 ```
 
+## API Documentation
+
+เอกสารนี้แบ่งเป็น 2 ส่วน:
+
+- Demo Server API: endpoint ที่อยู่บน server ตัวอย่างนี้ เช่น `http://localhost:3002`
+- NotiBank API: endpoint จริงของ NotiBank เช่น `http://localhost:3001`
+
+### Demo Server API
+
+#### GET `/settings`
+
+ใช้ดึง config ฝั่ง browser แบบไม่เปิดเผย secret
+
+Request:
+
+```bash
+curl http://localhost:3002/settings
+```
+
+Response:
+
+```json
+{
+  "apiBase": "http://localhost:3001",
+  "demoPort": 3002,
+  "webhookPath": "/webhook",
+  "apiKeySuffix": "abc123",
+  "lineConnectorConfigured": true
+}
+```
+
+#### GET `/events`
+
+ใช้เปิด Server-Sent Events เพื่อให้หน้า demo รับ event แบบ realtime
+
+Request:
+
+```bash
+curl -N http://localhost:3002/events
+```
+
+Event ที่อาจได้รับ:
+
+```text
+event: ready
+data: {"connected":true}
+
+event: webhook
+data: {"event":"transaction.fulfilled","transaction":{"id":"txn_..."},"signatureVerified":true}
+
+event: connector
+data: {"configured":true,"mode":"email_password","lastError":null}
+```
+
+#### POST `/create-transaction`
+
+ใช้สร้าง PromptPay QR ผ่าน NotiBank API โดย demo server จะใส่ `API_KEY` ให้เองจาก `.env`
+
+Request:
+
+```bash
+curl -X POST http://localhost:3002/create-transaction \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "amount": 100,
+    "orderId": "order-1001",
+    "expiresInSeconds": 300
+  }'
+```
+
+Request body:
+
+| Field | Type | Required | Description |
+|---|---|---:|---|
+| `amount` | number | yes | ยอดเงินหลักที่ต้องการสร้าง QR |
+| `orderId` | string | no | เลขอ้างอิง order; ถ้าไม่ส่ง demo จะสร้าง `demo-{timestamp}` |
+| `expiresInSeconds` | number | no | อายุ QR เป็นวินาที; default `300` |
+
+Response `201`:
+
+```json
+{
+  "id": "txn_202607abcdef123456",
+  "orderId": "order-1001",
+  "baseAmount": 100,
+  "amount": 100,
+  "suffixCents": 0,
+  "status": "pending",
+  "expiresAt": "2026-07-07T08:20:00.000Z",
+  "createdAt": "2026-07-07T08:15:00.000Z",
+  "fulfilledAt": null,
+  "qrDataUrl": "data:image/png;base64,...",
+  "metadata": { "source": "promptpay-client-demo" },
+  "statusToken": "st_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+}
+```
+
+Error examples:
+
+```json
+{ "error": "amount must be a positive number" }
+```
+
+```json
+{ "error": "LINE_TOKEN_EXPIRED", "message": "LINE token expired or not linked. Please re-login via QR." }
+```
+
+#### POST `/webhook`
+
+ใช้รับ webhook จาก NotiBank เมื่อ transaction เปลี่ยนสถานะ เช่นจ่ายสำเร็จหรือหมดอายุ
+
+Headers:
+
+| Header | Description |
+|---|---|
+| `x-webhook-signature` | HMAC SHA-256 จาก `WEBHOOK_SECRET` ในรูปแบบ `sha256=<hex>` |
+
+Request body example:
+
+```json
+{
+  "event": "transaction.fulfilled",
+  "transaction": {
+    "id": "txn_202607abcdef123456",
+    "orderId": "order-1001",
+    "amount": 100,
+    "status": "fulfilled"
+  }
+}
+```
+
+Response:
+
+```json
+{ "received": true }
+```
+
+ถ้า signature ไม่ถูกต้อง:
+
+```json
+{ "error": "Invalid signature" }
+```
+
+#### GET `/line-connector/status`
+
+ใช้ดูสถานะ LINE Connector ของ demo server
+
+Request:
+
+```bash
+curl http://localhost:3002/line-connector/status
+```
+
+Response:
+
+```json
+{
+  "configured": true,
+  "mode": "email_password",
+  "inFlight": false,
+  "lastAttemptAt": "2026-07-07T08:15:00.000Z",
+  "lastSuccessAt": "2026-07-07T08:15:01.000Z",
+  "lastError": null,
+  "tokenFile": "./secrets/line-token.json"
+}
+```
+
+#### POST `/line-connector/upload`
+
+ใช้สั่งให้ demo upload LINE token ไปตรวจสอบกับ NotiBank ทันที ไม่ต้องรอรอบ interval
+
+Request:
+
+```bash
+curl -X POST http://localhost:3002/line-connector/upload
+```
+
+Response:
+
+```json
+{
+  "configured": true,
+  "mode": "email_password",
+  "inFlight": false,
+  "lastAttemptAt": "2026-07-07T08:15:00.000Z",
+  "lastSuccessAt": "2026-07-07T08:15:01.000Z",
+  "lastError": null,
+  "tokenFile": "./secrets/line-token.json"
+}
+```
+
+#### POST `/line-connector/bootstrap`
+
+endpoint นี้ให้ NotiBank เรียกหลัง QR login สำเร็จ เพื่อส่ง token bundle มาให้ demo บันทึกลง `LINE_TOKEN_FILE`
+
+ผู้ใช้งานทั่วไปไม่ต้องเรียก endpoint นี้เอง
+
+Headers:
+
+| Header | Description |
+|---|---|
+| `x-connector-timestamp` | timestamp ที่ใช้ประกอบ HMAC |
+| `x-connector-signature` | HMAC SHA-256 จาก `WEBHOOK_SECRET` ในรูปแบบ `sha256=<hex>` |
+
+Request body:
+
+```json
+{
+  "authToken": "line-access-token",
+  "refreshToken": "line-refresh-token",
+  "mid": "u1234567890"
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "status": {
+    "configured": true,
+    "lastError": null
+  }
+}
+```
+
+### NotiBank API
+
+#### POST `/promptpay/transactions`
+
+ใช้สร้าง PromptPay transaction และ QR Code โดยตรงกับ NotiBank API
+
+Authentication:
+
+```text
+Authorization: Bearer <API_KEY>
+```
+
+Request:
+
+```bash
+curl -X POST http://localhost:3001/promptpay/transactions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer sk_line_your_key_here' \
+  -d '{
+    "amount": 100,
+    "orderId": "order-1001",
+    "expiresInSeconds": 300,
+    "metadata": {
+      "source": "my-system"
+    }
+  }'
+```
+
+Request body:
+
+| Field | Type | Required | Description |
+|---|---|---:|---|
+| `amount` | number | yes | ยอดเงินหลักที่ต้องการรับ |
+| `orderId` | string | yes | เลขอ้างอิง order ต้องไม่ซ้ำใน user เดียวกัน |
+| `expiresInSeconds` | number | no | อายุ QR; ระบบจำกัดสูงสุดตาม NotiBank |
+| `metadata` | object | no | ข้อมูลประกอบที่ระบบลูกค้าต้องการแนบ |
+
+Response `201`:
+
+```json
+{
+  "id": "txn_202607abcdef123456",
+  "orderId": "order-1001",
+  "apiKeyId": "key-id",
+  "baseAmount": 100,
+  "amount": 100.03,
+  "suffixCents": 3,
+  "qrDataUrl": "data:image/png;base64,...",
+  "metadata": { "source": "my-system" },
+  "status": "pending",
+  "expiresAt": "2026-07-07T08:20:00.000Z",
+  "createdAt": "2026-07-07T08:15:00.000Z",
+  "fulfilledAt": null,
+  "statusToken": "st_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+}
+```
+
+หมายเหตุ:
+
+- `amount` ที่ได้กลับมาอาจเป็นยอดจริง + suffix เช่น `100.03` เพื่อให้ระบบจับคู่ยอดโอนกับ transaction ได้แม่นขึ้น
+- เก็บ `statusToken` ไว้ฝั่ง server ลูกค้าเท่านั้น ใช้สำหรับตรวจสถานะโดยไม่ต้องใช้ API key จริง
+
+Common errors:
+
+| HTTP | Error | Meaning |
+|---:|---|---|
+| `401` | `Invalid API key` | API key ไม่ถูกต้อง |
+| `403` | `SUBSCRIPTION_EXPIRED` | subscription หมดอายุ |
+| `409` | `ORDER_ID_ALREADY_EXISTS` | `orderId` ซ้ำ |
+| `409` | `NO_SLOT_AVAILABLE` | suffix ของยอดนี้เต็มชั่วคราว |
+| `503` | `SYSTEM_DISABLED` | ระบบ PromptPay ของ user ถูกปิด |
+| `503` | `LINE_TOKEN_EXPIRED` | LINE token ใช้งานไม่ได้ ต้องเชื่อมต่อใหม่ |
+
+#### GET `/promptpay/transactions/:id/status`
+
+ใช้ตรวจสอบสถานะ transaction โดยไม่ต้องใช้ API key จริง ใช้ `statusToken` ที่ได้จากตอนสร้าง QR เท่านั้น
+
+Authentication:
+
+```text
+Authorization: Bearer <statusToken>
+```
+
+Request:
+
+```bash
+curl http://localhost:3001/promptpay/transactions/txn_202607abcdef123456/status \
+  -H 'Authorization: Bearer st_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+```
+
+Response `200`:
+
+```json
+{
+  "id": "txn_202607abcdef123456",
+  "orderId": "order-1001",
+  "amount": 100.03,
+  "status": "fulfilled",
+  "createdAt": "2026-07-07T08:15:00.000Z",
+  "expiresAt": "2026-07-07T08:20:00.000Z",
+  "fulfilledAt": "2026-07-07T08:16:30.000Z",
+  "metadata": { "source": "my-system" }
+}
+```
+
+Status ที่เป็นไปได้:
+
+| Status | Meaning |
+|---|---|
+| `pending` | ยังรอการชำระเงิน |
+| `fulfilled` | ชำระเงินสำเร็จและจับคู่แล้ว |
+| `expired` | QR หมดอายุหรือพ้นเวลาชำระ |
+
+Error examples:
+
+```json
+{ "error": "STATUS_TOKEN_REQUIRED" }
+```
+
+```json
+{ "message": "Invalid status token", "error": "Unauthorized", "statusCode": 401 }
+```
+
+```json
+{ "message": "Status token expired", "error": "Gone", "statusCode": 410 }
+```
+
+Response นี้จะไม่คืนข้อมูลภายใน เช่น `apiKeyId`, `webhookSecret`, `bankInfo`, `lineMessageId` หรือ `qrDataUrl`
+
+#### GET `/line/connector/public-key`
+
+ใช้ดึง public key ของ NotiBank สำหรับเข้ารหัส payload LINE Connector
+
+Request:
+
+```bash
+curl http://localhost:3001/line/connector/public-key
+```
+
+Response:
+
+```json
+{
+  "keyId": "line-connector-v1",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+}
+```
+
+#### POST `/line/connector/token`
+
+ใช้ upload LINE token หรือ fallback credential แบบ encrypted ไปให้ NotiBank ตรวจสอบ
+
+Authentication:
+
+```text
+Authorization: Bearer <API_KEY>
+```
+
+Required headers:
+
+| Header | Description |
+|---|---|
+| `x-connector-timestamp` | timestamp ตอน sign request |
+| `x-connector-nonce` | nonce กัน replay |
+| `x-connector-signature` | HMAC SHA-256 จาก `WEBHOOK_SECRET` |
+
+Request body เป็น hybrid encrypted payload:
+
+```json
+{
+  "keyId": "line-connector-v1",
+  "encryptedKey": "...",
+  "iv": "...",
+  "tag": "...",
+  "ciphertext": "..."
+}
+```
+
+plaintext ก่อน encrypt เป็นได้ 2 รูปแบบ:
+
+```json
+{
+  "authToken": "line-access-token",
+  "refreshToken": "line-refresh-token",
+  "mid": "u1234567890",
+  "fallback": {
+    "type": "email_password",
+    "email": "line@example.com",
+    "password": "line-password"
+  }
+}
+```
+
+หรือ:
+
+```json
+{
+  "type": "email_password",
+  "email": "line@example.com",
+  "password": "line-password"
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "tokenBundle": {
+    "authToken": "new-line-access-token",
+    "refreshToken": "new-line-refresh-token",
+    "mid": "u1234567890"
+  }
+}
+```
+
+ถ้า token เดิมยังใช้ได้ อาจไม่มี `tokenBundle` กลับมา เพราะไม่จำเป็นต้องบันทึก token ใหม่
+
 ## วิธีทดสอบ
 
 1. เปิดหน้า demo
