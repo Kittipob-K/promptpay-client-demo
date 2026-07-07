@@ -3,3 +3,4 @@ node_modules/
 secrets/line-token.json
 deploy-casaos.sh
 package-lock.json
+.recall/.capture.json
